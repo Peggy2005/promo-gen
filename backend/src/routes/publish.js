@@ -105,13 +105,14 @@ router.post('/blogger', async (req, res) => {
 router.post('/discord', async (req, res) => {
   const { webhookUrl, title, copy, imageUrl, startDate, endDate } = req.body;
   if (!webhookUrl) return res.status(400).json({ success: false, error: '缺少 Webhook URL' });
+  if (!copy || !copy.trim()) return res.status(400).json({ success: false, error: '廣告文案不可為空，請先生成文案再發布' });
 
   const imgPath = imageUrl ? localImagePath(imageUrl) : null;
   const hasImage = imgPath && fs.existsSync(imgPath);
 
   const embed = {
     title: title || '廣告文案',
-    description: copy,
+    description: copy || undefined,
     color: 0xf97316,
     ...(startDate && endDate ? { footer: { text: `宣傳期間：${startDate} – ${endDate}` } } : {}),
   };
@@ -119,14 +120,14 @@ router.post('/discord', async (req, res) => {
   try {
     let response;
     if (hasImage) {
-      // Upload image as attachment and reference in embed
-      const FormData = require('form-data');
+      const fileBuffer = fs.readFileSync(imgPath);
+      const blob = new Blob([fileBuffer], { type: 'image/png' });
       const form = new FormData();
-      form.append('file', fs.createReadStream(imgPath), { filename: 'promo.png' });
       embed.image = { url: 'attachment://promo.png' };
       form.append('payload_json', JSON.stringify({ embeds: [embed] }));
+      form.append('files[0]', blob, 'promo.png');
 
-      response = await fetch(webhookUrl, { method: 'POST', body: form, headers: form.getHeaders() });
+      response = await fetch(webhookUrl, { method: 'POST', body: form });
     } else {
       response = await fetch(webhookUrl, {
         method: 'POST',
